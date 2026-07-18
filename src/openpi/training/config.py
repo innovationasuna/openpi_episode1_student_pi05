@@ -801,6 +801,31 @@ _CONFIGS = [
         ema_decay=None,
     ),
     #
+    # (enpei) pi0.5 单臂【全量微调】—— 推荐。H20 显存足够,官方 pi05 均为全量微调,效果更有保障。
+    # 与上面 LoRA 版唯一区别:去掉 LoRA 变体与 freeze_filter,采用与官方 pi05_libero 一致的全量训练设置。
+    # batch_size 按单卡显存调:爆显存就往下调(16/8),富余可上调。步数与 LoRA 相同(30000)。
+    #
+    TrainConfig(
+        name="enpei_robot_demo_move_fruit_pi05_finetune",
+        model=pi0_config.Pi0Config(pi05=True, action_horizon=10, discrete_state_input=False),
+        data=LeRobotLiberoDataConfig(
+            repo_id="enpeicv/demo_move_fruit_openpi",  # 转换后的数据集 repo_id
+            root="./enpei_dataset/demo_move_fruit_openpi",  # 本地数据集路径
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("/root/autodl-tmp/pi05_base/params"),
+        batch_size=32,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=5e-5,
+            decay_steps=30_000,
+            decay_lr=5e-5,
+        ),
+        optimizer=_optimizer.AdamW(clip_gradient_norm=1.0),
+        ema_decay=0.999,
+        num_train_steps=30_000,
+    ),
+    #
     # Fine-tuning Aloha configs.
     #
     # This is a test config that is used to illustate how train on a custom LeRobot dataset.
