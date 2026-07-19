@@ -773,7 +773,7 @@ _CONFIGS = [
     # 数据适配层(repack / LiberoInputs / LiberoOutputs)沿用 LeRobotLiberoDataConfig,与模型无关。
     #
     TrainConfig(
-        name="enpei_robot_demo_move_fruit_pi05_low_mem_finetune",
+        name="enpei_robot_demo_move_pocket_tissue_pi05_low_mem_finetune",
         model=pi0_config.Pi0Config(
             pi05=True,
             action_horizon=10,
@@ -782,8 +782,8 @@ _CONFIGS = [
             action_expert_variant="gemma_300m_lora",
         ),
         data=LeRobotLiberoDataConfig(
-            repo_id="enpeicv/demo_move_fruit_openpi",  # 转换后的数据集 repo_id
-            root="./enpei_dataset/demo_move_fruit_openpi",  # 本地数据集路径
+            repo_id="enpeicv/demo_move_pocket_tissue_openpi",  # 转换后的数据集 repo_id
+            root="./enpei_dataset/demo_move_pocket_tissue_openpi",  # 本地数据集路径
             base_config=DataConfig(prompt_from_task=True),
         ),
         # pi0.5 需要 pi05_base 权重(pi0_base 用不了),先下载解压到本地此路径。
@@ -806,11 +806,11 @@ _CONFIGS = [
     # batch_size 按单卡显存调:爆显存就往下调(16/8),富余可上调。步数与 LoRA 相同(30000)。
     #
     TrainConfig(
-        name="enpei_robot_demo_move_fruit_pi05_finetune",
+        name="enpei_robot_demo_move_pocket_tissue_pi05_finetune",
         model=pi0_config.Pi0Config(pi05=True, action_horizon=10, discrete_state_input=False),
         data=LeRobotLiberoDataConfig(
-            repo_id="enpeicv/demo_move_fruit_openpi",  # 转换后的数据集 repo_id
-            root="./enpei_dataset/demo_move_fruit_openpi",  # 本地数据集路径
+            repo_id="enpeicv/demo_move_pocket_tissue_openpi",  # 转换后的数据集 repo_id
+            root="./enpei_dataset/demo_move_pocket_tissue_openpi",  # 本地数据集路径
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("/root/autodl-tmp/pi05_base/params"),
