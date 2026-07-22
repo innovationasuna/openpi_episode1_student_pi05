@@ -1,6 +1,6 @@
 # enpei pi0.5 适配说明
 
-本仓库 = **最新版 openpi**(原生支持 pi0.5)+ **enpei 适配层**。相比 enpeizhao 原来的 `openpi_episode1_student`(基于 2025-02 的老 openpi),这里是把 enpei 的改动重新搬到带 pi0.5 的最新 openpi 上,并把训练配置切换为 pi0.5。
+本仓库 = **支持 pi0.5 的 openpi** + **enpei 适配层**。当前训练任务为 120 条单臂 `demo_move_block` 数据，全量微调配置面向单张 H20 96GB。
 
 ## 相比官方 openpi 增加/修改的内容
 
@@ -10,12 +10,12 @@
    - 作用：训练可以直接用本地转换好的数据集(`root="./enpei_dataset/..."`),不必上传 HuggingFace hub。
 
 2. **enpei pi0.5 训练配置**(`src/openpi/training/config.py`)
-   - 新增 `enpei_robot_demo_move_fruit_pi05_low_mem_finetune`。
-   - 基于官方 `pi05_libero`,改为:`model=Pi0Config(pi05=True, action_horizon=10, discrete_state_input=False, LoRA 变体)`、`data=LeRobotLiberoDataConfig(enpei 数据集 + 本地 root)`、`weight_loader=本地 pi05_base`、LoRA freeze_filter、`ema_decay=None`。
+   - 全量配置：`enpei_robot_demo_move_block_pi05_finetune`；LoRA 备用配置：`enpei_robot_demo_move_block_pi05_low_mem_finetune`。
+   - 两者均使用 `action_horizon=50`、`discrete_state_input=False` 和 `extra_delta_transform=True`。全量配置使用 batch 32、30k steps、2.5e-5 到 2.5e-6 cosine LR、EMA 0.999。
    - **数据适配层(repack / LiberoInputs / LiberoOutputs)与模型无关,pi0 与 pi0.5 通用**,因此直接复用官方 `LeRobotLiberoDataConfig` + `libero_policy.py`。
 
 3. **数据转换脚本**(`examples/libero/lerobot2oppi.py`、`lerobot2oppi_two.py`)
-   - 从 enpeizhao 的 fork 原样搬来:把 LeRobot 数据集重打包成 openpi 期望的键(`image`=fixed 相机、`wrist_image`=handeye 相机、`state`、`actions`),并做弧度处理、缩放到 224×224。
+   - 把 LeRobot 数据集重打包成 OpenPI 期望的键，并把相机图像等比例缩放、补黑边到 224×224。脚本不会转换 state/action 数值，源数据前六关节必须已经是弧度制。
 
 4. **依赖钉版**(`pyproject.toml`)
    - `override-dependencies` 增加 `datasets==3.6.0`(enpeizhao 的兼容修复;若与最新 lerobot 冲突可去掉)。
@@ -25,18 +25,18 @@
 ```bash
 # 1. 转换数据(必须弧度制)
 uv run ./examples/libero/lerobot2oppi.py \
-  --source-repo-id=enpeicv/demo_move_fruit \
-  --target-repo-id=enpeicv/demo_move_fruit_openpi \
-  --output-path=./enpei_dataset/demo_move_fruit_openpi \
-  --source-dataset-root=/root/autodl-tmp/openpi/enpei_dataset/demo_move_fruit \
-  --max-episodes=100
+  --source-repo-id=enpeicv/demo_move_block \
+  --target-repo-id=enpeicv/demo_move_block_openpi \
+  --output-path=./enpei_dataset/demo_move_block_openpi \
+  --source-dataset-root=./enpei_dataset/demo_move_block \
+  --max-episodes=120
 
 # 2. 计算归一化
-uv run scripts/compute_norm_stats.py --config-name enpei_robot_demo_move_fruit_pi05_low_mem_finetune
+uv run scripts/compute_norm_stats.py --config-name enpei_robot_demo_move_block_pi05_finetune
 
 # 3. 训练
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py \
-  enpei_robot_demo_move_fruit_pi05_low_mem_finetune --exp-name=my_experiment --overwrite
+  enpei_robot_demo_move_block_pi05_finetune --exp-name=demo_move_block_full_v1 --overwrite
 ```
 
 ## ⚠️ 必须在 GPU(H20)上验证的点

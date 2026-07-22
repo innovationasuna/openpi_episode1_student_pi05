@@ -1,25 +1,11 @@
 #!/usr/bin/env python
 
-"""Script to convert a LeRobot dataset with angles in radians to degrees format.
+"""Repack a dual-arm Enpei LeRobot dataset for OpenPI.
 
-This script loads an existing LeRobot dataset where angles are stored in radians (0-2π),
-creates a new dataset with the same structure, and converts all angle values to degrees (0-360)
-while preserving all other data.
-
-The conversion is done by multiplying each angle value by 180/π, which transforms:
-- Input range: 0 to 2π radians
-- Output range: 0 to 360 degrees
-
-特殊处理：
-- 对于第7个关节（夹爪），当use_radian=True时，其值被映射到[0,1]范围而不是真正的弧度值
-- 脚本会将夹爪值从[0,1]范围转换回角度范围[20, 110]度
-
-Example usage: 
-python convert_radians_to_degrees.py --source_repo_id=enpeicv/move_fruit_radians --target_repo_id=enpeicv/move_fruit_degrees --source_dataset_root=/path/to/source/dataset --push_to_hub=False
+State and action values are copied without unit conversion. Camera images are resized with
+aspect-ratio-preserving black padding to match online inference.
 """
 
-import math
-import os
 import shutil
 from pathlib import Path
 
@@ -27,42 +13,23 @@ import numpy as np
 import torch
 import tqdm
 import tyro
-import torch
-from torchvision.utils import save_image
-import torchvision.transforms as T
-
 
 from lerobot.common.datasets.lerobot_dataset import HF_LEROBOT_HOME, LeRobotDataset, LeRobotDatasetMetadata
+from openpi_client import image_tools
 
 
-def radians_to_degrees(radians):
-    """
-    Convert angles from radians to degrees.
-    
-    Args:
-        radians: Tensor or array of angles in radians
-        
-    Returns:
-        Tensor or array of angles in degrees
-    """
-    return radians * (180.0 / math.pi)
+IMAGE_SIZE = 224
+
+
+def prepare_image(image: torch.Tensor) -> np.ndarray:
+    """Convert a LeRobot CHW image to the padded HWC uint8 format used online."""
+    image = image.detach().cpu().permute(1, 2, 0).numpy()
+    image = image_tools.convert_to_uint8(image)
+    return image_tools.resize_with_pad(image, IMAGE_SIZE, IMAGE_SIZE)
 
 
 def convert_dataset(source_repo_id: str, target_repo_id: str, *, push_to_hub: bool = False, max_episodes: int = None, output_path: str = None, source_dataset_root: str = None):
-    """Convert a dataset from radians to degrees.
-    
-    Args:
-        source_repo_id: The repository ID of the source dataset (with angles in radians)
-        target_repo_id: The repository ID for the new dataset (with angles in degrees)
-        push_to_hub: Whether to push the new dataset to the Hugging Face Hub
-        max_episodes: Maximum number of episodes to convert. If None, all episodes are converted.
-        output_path: Custom output path for the dataset. If None, uses HF_LEROBOT_HOME/target_repo_id.
-        source_dataset_root: Custom root path for the source dataset. If None, uses HF_LEROBOT_HOME/source_repo_id.
-    
-    注意：
-        对于第7个关节（夹爪），当use_radian=True时，其值被映射到[0,1]范围而不是真正的弧度值。
-        本函数会将夹爪值从[0,1]范围转换回角度范围[20, 110]度。
-    """
+    """Repack a dual-arm dataset without changing state or action values."""
     # Clean up any existing dataset in the output directory
     if output_path is None:
         dataset_path = HF_LEROBOT_HOME / target_repo_id
@@ -95,17 +62,17 @@ def convert_dataset(source_repo_id: str, target_repo_id: str, *, push_to_hub: bo
         features={
             "image": {
                 "dtype": "image",
-                "shape": (256, 256, 3),
+                "shape": (IMAGE_SIZE, IMAGE_SIZE, 3),
                 "names": ["height", "width", "channel"],
             },
             "wrist_image_left": {
                 "dtype": "image",
-                "shape": (256, 256, 3),
+                "shape": (IMAGE_SIZE, IMAGE_SIZE, 3),
                 "names": ["height", "width", "channel"],
             },
             "wrist_image_right": {
                 "dtype": "image",
-                "shape": (256, 256, 3),
+                "shape": (IMAGE_SIZE, IMAGE_SIZE, 3),
                 "names": ["height", "width", "channel"],
             },
             "state": {
@@ -151,18 +118,10 @@ def convert_dataset(source_repo_id: str, target_repo_id: str, *, push_to_hub: bo
             state = frame["observation.state"]
             action = frame["action"]
             
-            # 转换图像格式从 [3, 480, 640] 到 [256, 256, 3]
-            # 首先使用 torch 的 resize 操作调整大小
-            # 调整大小
-            resize_transform = T.Resize((256, 256))
-            image_fixed_resized = resize_transform(image_fixed)
-            image_handeye_left_resized = resize_transform(image_handeye_left)
-            image_handeye_right_resized = resize_transform(image_handeye_right)
-            
-            # 手动转换通道顺序从 [C, H, W] 到 [H, W, C]
-            image_fixed = image_fixed_resized.permute(1, 2, 0)
-            image_handeye_left = image_handeye_left_resized.permute(1, 2, 0)
-            image_handeye_right = image_handeye_right_resized.permute(1, 2, 0)
+            # 与在线客户端保持一致：CHW -> HWC uint8，再等比例缩放并补黑边到 224x224。
+            image_fixed = prepare_image(image_fixed)
+            image_handeye_left = prepare_image(image_handeye_left)
+            image_handeye_right = prepare_image(image_handeye_right)
 
             # print shape
             # print(image_fixed.shape)
@@ -203,20 +162,7 @@ def main(source_repo_id: str = "enpeicv/move_fruit_radians",
          max_episodes: int = None,
          output_path: str = None,
          source_dataset_root: str = None):
-    """Main function to convert a dataset from radians to degrees.
-    
-    Args:
-        source_repo_id: The repository ID of the source dataset (with angles in radians)
-        target_repo_id: The repository ID for the new dataset (with angles in degrees)
-        push_to_hub: Whether to push the new dataset to the Hugging Face Hub
-        max_episodes: Maximum number of episodes to convert. If None, all episodes are converted.
-        output_path: Custom output path for the dataset. If None, uses HF_LEROBOT_HOME/target_repo_id.
-        source_dataset_root: Custom root path for the source dataset. If None, uses HF_LEROBOT_HOME/source_repo_id.
-    
-    注意：
-        对于第7个关节（夹爪），当use_radian=True时，其值被映射到[0,1]范围而不是真正的弧度值。
-        本函数会将夹爪值从[0,1]范围转换回角度范围[20, 110]度。
-    """
+    """CLI entry point for dual-arm dataset repacking."""
     convert_dataset(source_repo_id, target_repo_id, push_to_hub=push_to_hub, max_episodes=max_episodes, output_path=output_path, source_dataset_root=source_dataset_root)
 
 

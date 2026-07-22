@@ -773,18 +773,19 @@ _CONFIGS = [
     # 数据适配层(repack / LiberoInputs / LiberoOutputs)沿用 LeRobotLiberoDataConfig,与模型无关。
     #
     TrainConfig(
-        name="enpei_robot_demo_move_pocket_tissue_pi05_low_mem_finetune",
+        name="enpei_robot_demo_move_block_pi05_low_mem_finetune",
         model=pi0_config.Pi0Config(
             pi05=True,
-            action_horizon=10,
+            action_horizon=50,
             discrete_state_input=False,
             paligemma_variant="gemma_2b_lora",
             action_expert_variant="gemma_300m_lora",
         ),
         data=LeRobotLiberoDataConfig(
-            repo_id="enpeicv/demo_move_pocket_tissue_openpi",  # 转换后的数据集 repo_id
-            root="./enpei_dataset/demo_move_pocket_tissue_openpi",  # 本地数据集路径
+            repo_id="enpeicv/demo_move_block_openpi",  # 转换后的数据集 repo_id
+            root="./enpei_dataset/demo_move_block_openpi",  # 本地数据集路径
             base_config=DataConfig(prompt_from_task=True),
+            extra_delta_transform=True,
         ),
         # pi0.5 需要 pi05_base 权重(pi0_base 用不了),先下载解压到本地此路径。
         weight_loader=weight_loaders.CheckpointWeightLoader("/root/autodl-tmp/pi05_base/params"),
@@ -792,7 +793,7 @@ _CONFIGS = [
         # LoRA 微调对应的 freeze filter,必须与上面的 model 变体一致。
         freeze_filter=pi0_config.Pi0Config(
             pi05=True,
-            action_horizon=10,
+            action_horizon=50,
             discrete_state_input=False,
             paligemma_variant="gemma_2b_lora",
             action_expert_variant="gemma_300m_lora",
@@ -801,29 +802,41 @@ _CONFIGS = [
         ema_decay=None,
     ),
     #
-    # (enpei) pi0.5 单臂【全量微调】—— 推荐。H20 显存足够,官方 pi05 均为全量微调,效果更有保障。
-    # 与上面 LoRA 版唯一区别:去掉 LoRA 变体与 freeze_filter,采用与官方 pi05_libero 一致的全量训练设置。
-    # batch_size 按单卡显存调:爆显存就往下调(16/8),富余可上调。步数与 LoRA 相同(30000)。
+    # (enpei) pi0.5 单臂【全量微调】—— 面向单张 H20 96GB 和当前 120 episodes 数据集。
+    # batch 32 使用较保守的 2.5e-5 cosine decay；若显存不足，优先将 batch 降为 24/16。
+    # 保留 EMA，并每 5000 步永久保留一个 checkpoint，便于真机比较不同训练阶段。
     #
     TrainConfig(
-        name="enpei_robot_demo_move_pocket_tissue_pi05_finetune",
-        model=pi0_config.Pi0Config(pi05=True, action_horizon=10, discrete_state_input=False),
+        name="enpei_robot_demo_move_block_pi05_finetune",
+        model=pi0_config.Pi0Config(pi05=True, action_horizon=50, discrete_state_input=False),
         data=LeRobotLiberoDataConfig(
-            repo_id="enpeicv/demo_move_pocket_tissue_openpi",  # 转换后的数据集 repo_id
-            root="./enpei_dataset/demo_move_pocket_tissue_openpi",  # 本地数据集路径
+            repo_id="enpeicv/demo_move_block_openpi",  # 转换后的数据集 repo_id
+            root="./enpei_dataset/demo_move_block_openpi",  # 本地数据集路径
             base_config=DataConfig(prompt_from_task=True),
+            extra_delta_transform=True,
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("/root/autodl-tmp/pi05_base/params"),
         batch_size=32,
         lr_schedule=_optimizer.CosineDecaySchedule(
             warmup_steps=1_000,
-            peak_lr=5e-5,
+            peak_lr=2.5e-5,
             decay_steps=30_000,
-            decay_lr=5e-5,
+            decay_lr=2.5e-6,
         ),
-        optimizer=_optimizer.AdamW(clip_gradient_norm=1.0),
+        optimizer=_optimizer.AdamW(
+            b1=0.9,
+            b2=0.95,
+            eps=1e-8,
+            weight_decay=1e-10,
+            clip_gradient_norm=1.0,
+        ),
         ema_decay=0.999,
         num_train_steps=30_000,
+        num_workers=4,
+        log_interval=100,
+        save_interval=1_000,
+        keep_period=5_000,
+        fsdp_devices=1,
     ),
     #
     # Fine-tuning Aloha configs.
