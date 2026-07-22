@@ -27,8 +27,8 @@
 uv run ./examples/libero/lerobot2oppi.py \
   --source-repo-id=enpeicv/demo_move_block \
   --target-repo-id=enpeicv/demo_move_block_openpi \
-  --output-path=./enpei_dataset/demo_move_block_openpi \
-  --source-dataset-root=./enpei_dataset/demo_move_block \
+  --output-path=/root/autodl-tmp/openpi_episode1_student_pi05/enpei_dataset/demo_move_block \
+  --source-dataset-root=/root/autodl-tmp/openpi/enpei_dataset/demo_move_block \
   --max-episodes=120
 
 # 2. 计算归一化

@@ -783,7 +783,7 @@ _CONFIGS = [
         ),
         data=LeRobotLiberoDataConfig(
             repo_id="enpeicv/demo_move_block_openpi",  # 转换后的数据集 repo_id
-            root="./enpei_dataset/demo_move_block_openpi",  # 本地数据集路径
+            root="./enpei_dataset/demo_move_block",  # 转换后的本地数据集路径
             base_config=DataConfig(prompt_from_task=True),
             extra_delta_transform=True,
         ),
@@ -811,7 +811,7 @@ _CONFIGS = [
         model=pi0_config.Pi0Config(pi05=True, action_horizon=50, discrete_state_input=False),
         data=LeRobotLiberoDataConfig(
             repo_id="enpeicv/demo_move_block_openpi",  # 转换后的数据集 repo_id
-            root="./enpei_dataset/demo_move_block_openpi",  # 本地数据集路径
+            root="./enpei_dataset/demo_move_block",  # 转换后的本地数据集路径
             base_config=DataConfig(prompt_from_task=True),
             extra_delta_transform=True,
         ),
